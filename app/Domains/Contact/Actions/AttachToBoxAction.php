@@ -3,7 +3,7 @@
 namespace App\Domains\Contact\Actions;
 
 use App\Domains\Contact\DTO\ContactDTO;
-use App\Domains\Contact\Contracts\BoxServiceContract;
+use App\Domains\Box\Contracts\BoxServiceContract;
 
 class AttachToBoxAction
 {

@@ -4,15 +4,15 @@ namespace App\Domains\Box\Collections;
 
 
 use App\Domains\Common\DTOCollection;
-use App\Domains\Box\DTO\RecipientDTO;
+use App\Domains\Box\DTO\ContactDetailDTO;
 
 /**
- * @template-extends DTOCollection<RecipientDTO>
+ * @template-extends DTOCollection<ContactDetailDTO>
  */
 class ContactDetailDTOCollection extends DTOCollection
 {
     protected function dto(): string
     {
-        return RecipientDTO::class;
+        return ContactDetailDTO::class;
     }
 }

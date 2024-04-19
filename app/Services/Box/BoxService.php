@@ -2,7 +2,7 @@
 
 namespace App\Services\Box;
 
-use App\Domains\Contact\Contracts\BoxServiceContract;
+use App\Domains\Box\Contracts\BoxServiceContract;
 
 class BoxService implements BoxServiceContract
 {
