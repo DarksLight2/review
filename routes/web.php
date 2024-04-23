@@ -1,100 +1,72 @@
 <?php
 
-use Google\Client;
-use Google\Service\Calendar;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Domains\Contact\DTO\CreateContactDTO;
-use App\Domains\Box\Collections\RecipientDTOCollection;
+use Illuminate\Support\Facades\Redis;
+use App\Internal\Google\GoogleClientManager;
+use Symfony\Component\HttpFoundation\Response;
 
 
 Route::get('/', function () {
 //    $coll = new RecipientDTOCollection();
 //    $coll->push(new CreateContactDTO('test'));
 //    dd($coll->find(0));
-    function getClient()
-    {
-        $client = new Client();
-        $client->setApplicationName('Google Calendar API PHP Quickstart');
-        $client->setScopes('https://www.googleapis.com/auth/calendar.events.readonly');
-        $client->setAuthConfig('../client_secret_google.json');
-        $client->setAccessType('offline');
-        $client->setPrompt('select_account consent');
-
-        // Load previously authorized token from a file, if it exists.
-        // The file token.json stores the user's access and refresh tokens, and is
-        // created automatically when the authorization flow completes for the first
-        // time.
-        $tokenPath = 'token.json';
-        if (file_exists($tokenPath)) {
-            $accessToken = json_decode(file_get_contents($tokenPath), true);
-            $client->setAccessToken($accessToken);
-        }
-
-        // If there is no previous token or it's expired.
-        if ($client->isAccessTokenExpired()) {
-            // Refresh the token if possible, else fetch a new one.
-            if ($client->getRefreshToken()) {
-                $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-            } else {
-                // Request authorization from the user.
-                $authUrl = $client->createAuthUrl();
-                printf("Open the following link in your browser:\n%s\n", $authUrl);
-                print 'Enter verification code: ';
-                $authCode = trim(fgets(STDIN));
-
-                // Exchange authorization code for an access token.
-                $accessToken = $client->fetchAccessTokenWithAuthCode($authCode);
-                $client->setAccessToken($accessToken);
-
-                // Check to see if there was an error.
-                if (array_key_exists('error', $accessToken)) {
-                    throw new Exception(join(', ', $accessToken));
-                }
-            }
-            // Save the token to a file.
-            if (!file_exists(dirname($tokenPath))) {
-                mkdir(dirname($tokenPath), 0700, true);
-            }
-            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
-        }
-        return $client;
-    }
-
-    $client = getClient();
-    $service = new Calendar($client);
-
-// Print the next 10 events on the user's calendar.
-    try{
-
-        $calendarId = 'primary';
-        $optParams = array(
-            'maxResults' => 10,
-            'orderBy' => 'startTime',
-            'singleEvents' => true,
-            'timeMin' => date('c'),
-        );
-        $results = $service->events->listEvents($calendarId, $optParams);
-        $events = $results->getItems();
-
-        if (empty($events)) {
-            print "No upcoming events found.\n";
-        } else {
-            print "Upcoming events:\n";
-            foreach ($events as $event) {
-                $start = $event->start->dateTime;
-                if (empty($start)) {
-                    $start = $event->start->date;
-                }
-                printf("%s (%s)\n", $event->getSummary(), $start);
-            }
-        }
-    }
-    catch(Exception $e) {
-        // TODO(developer) - handle error appropriately
-        echo 'Message: ' .$e->getMessage();
-    }
-
-    dd($client);
 
     return view('welcome');
 });
+
+Route::get('/redirect/oauth2/google/calendar', function (Request $request) {
+
+    $user_id = auth()->user()->id;
+
+    $client = (new GoogleClientManager())->createCalendarClient();
+
+    $accessToken = $client->fetchAccessTokenWithAuthCode($request->query('code'));
+
+    if (empty($accessToken)) return redirect()->setStatusCode(Response::HTTP_BAD_REQUEST);
+
+    $client->setAccessToken($accessToken);
+
+    if (array_key_exists('error', $accessToken)) {
+        throw new Exception(join(', ', $accessToken));
+    }
+
+    Redis::set("$user_id:google:calendar:token", json_encode($client->getAccessToken()));
+
+    return view('redirect.oauth2.google.calendar');
+
+})->name('redirect.oauth2.google.calendar');
+
+Route::get('/google/calendar/sync', function (Request $request) {
+
+    $user_id = auth()->user()->id;
+
+    $client = (new GoogleClientManager())->createCalendarClient();
+
+    $google_token = Redis::get("$user_id:google:calendar:token");
+
+    if (isset($google_token)) {
+        $accessToken = json_decode($google_token, true);
+        $client->setAccessToken($accessToken);
+    }
+
+    if ($client->isAccessTokenExpired()) {
+        $token = $client->getRefreshToken();
+        if ($token) {
+            $client->fetchAccessTokenWithRefreshToken($token);
+            Redis::set("$user_id:google:calendar:token", json_encode($token));
+        } else {
+            return response()->json([
+                'status' => 'need_authorization',
+                'data'   => [
+                    'url' => $client->createAuthUrl()
+                ]
+            ]);
+        }
+    }
+
+    # start sync data
+
+    return response()->noContent();
+
+})->name('google.calendar.sync');
