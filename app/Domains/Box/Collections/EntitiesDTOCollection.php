@@ -11,7 +11,7 @@ use App\Domains\Common\DTOCollection;
  */
 class EntitiesDTOCollection extends DTOCollection
 {
-    protected function dto(): string
+    protected static function dto(): string
     {
         return EntityDTO::class;
     }

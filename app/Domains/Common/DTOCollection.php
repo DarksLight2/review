@@ -4,19 +4,21 @@ namespace App\Domains\Common;
 
 use Exception;
 use Countable;
+use ArrayIterator;
 
 /**
- * @template Item
+ * @template TKey of array-key
+ * @template TValue
  */
 abstract class DTOCollection implements Countable
 {
     /**
-     * @var Item[] $collection
+     * @var TValue[] $collection
      */
     protected array $collection = [];
 
     /**
-     * @param Item[] $data
+     * @param TValue[] $data
      * @throws Exception
      */
     public function __construct(array $data = [])
@@ -30,7 +32,7 @@ abstract class DTOCollection implements Countable
     /**
      * @return class-string
      */
-    abstract protected function dto(): string;
+    abstract protected static function dto(): string;
 
     public function count(): int
     {
@@ -39,7 +41,7 @@ abstract class DTOCollection implements Countable
 
     /**
      * @param string|int $key
-     * @param Item $item
+     * @param TValue $item
      * @throws Exception
      */
     public function put(string|int $key, mixed $item): void
@@ -50,7 +52,7 @@ abstract class DTOCollection implements Countable
     }
 
     /**
-     * @param Item $items
+     * @param TValue $items
      */
     public function push(mixed $items): void
     {
@@ -90,7 +92,7 @@ abstract class DTOCollection implements Countable
     /**
      * @param mixed $searchable
      * @param bool $is_value
-     * @return null|Item
+     * @return null|TValue
      * @throws Exception
      */
     public function find(array|string|int $searchable, bool $is_value = false): mixed
@@ -119,7 +121,35 @@ abstract class DTOCollection implements Countable
      */
     public static function fill(array $data): static
     {
-        return new static($data);
+        $collection = [];
+        $dto_class_name = static::dto();
+
+        foreach ($data as $item) {
+            $collection[] = $dto_class_name::fill($item);
+        }
+
+        return new static($collection);
+    }
+
+    public function pluck(string $attribute, callable $callback = null): array
+    {
+        $result = [];
+
+        foreach ($this->collection as $item) {
+            if(!call_user_func($callback, $item)) continue;
+            if(!property_exists($item, $attribute)) throw new \InvalidArgumentException("Attribute '$attribute' does not exist in dto.");
+            $result[] = $item->$attribute;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): ArrayIterator
+    {
+        return new ArrayIterator($this->collection);
     }
 
     public function __toArray()

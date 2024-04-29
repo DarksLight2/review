@@ -2,10 +2,10 @@
 
 namespace App\Domains\Box\Enums;
 
-enum BoxPermissionEnum
+enum BoxPermissionEnum: string
 {
-    case Create;
-    case Delete;
-    case Read;
-    case Update;
+    case Create = 'create';
+    case Delete = 'delete';
+    case View   = 'view';
+    case Update = 'update';
 }
